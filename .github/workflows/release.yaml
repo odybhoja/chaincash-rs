@@ -1,6 +1,10 @@
-# Builds release binaries and publishes them as a GitHub release when a version tag is pushed:
+# Builds release binaries and publishes them as a GitHub release when a version tag is pushed.
+# Tags follow the same vMAJOR.MINOR.PATCH scheme as https://github.com/ergoplatform/ergo/releases:
 #
 #   git tag v0.1.0 && git push origin v0.1.0
+#
+# Tags with a suffix (e.g. v0.2.0-rc.1) are published as pre-releases, which the install scripts
+# skip unless the tag is requested explicitly.
 #
 # The asset names are what scripts/install/install.{sh,ps1} download, keep them in sync.
 name: release
@@ -80,9 +84,15 @@ jobs:
         run: |
           cp config/predicates/example.toml dist/predicate-example.toml
           cd dist
-          sha256sum * > SHA256SUMS
+          sha256sum -- * > SHA256SUMS
           cat SHA256SUMS
       - name: create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in
+            *-*) prerelease="--prerelease" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" \
+            --generate-notes --verify-tag $prerelease

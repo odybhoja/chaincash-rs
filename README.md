@@ -31,20 +31,32 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.ps1 | iex
 ```
 
-To install a specific release pass its tag, e.g. `... | sh -s v0.1.0` or `$v="0.1.0"; irm ... | iex` on Windows.
+Releases are tagged `vMAJOR.MINOR.PATCH` (e.g. `v0.1.0`), the same scheme as the
+[Ergo node](https://github.com/ergoplatform/ergo/releases). To install a specific release pass its tag, e.g.
+`... | sh -s -- v0.1.0`, or `$v="0.1.0"; irm ... | iex` on Windows.
+
+The binary is installed to `~/.local/bin` by default. To use a different directory, such as a dedicated
+`~/.chaincash/bin`, pass `--bin-dir` (or set `CHAINCASH_BIN_DIR`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.sh | sh -s -- --bin-dir ~/.chaincash/bin
+```
+
+```powershell
+$ChaincashBinDir="~\.chaincash\bin"; irm https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.ps1 | iex
+```
 
 The scripts install the following files. Existing configuration is never overwritten, so the scripts can also be
 used to upgrade:
 
 | | Linux / macOS | Windows |
 | --- | --- | --- |
-| Binary | `~/.local/bin/chaincash` | `~\.local\bin\chaincash.exe` (added to `PATH`) |
+| Binary | `~/.local/bin/chaincash` (or `--bin-dir`) | `~\.local\bin\chaincash.exe` (or `$ChaincashBinDir`, added to `PATH`) |
 | Config | `~/.config/chaincash/config.toml` | `~\.config\chaincash\config.toml` |
 | Predicates | `~/.config/chaincash/predicates/` | `~\.config\chaincash\predicates\` |
 | Database | `~/.local/share/chaincash/chaincash.sqlite` | `%LOCALAPPDATA%\chaincash\chaincash.sqlite` |
 
-The install prefix can be changed with the `CHAINCASH_INSTALL` environment variable (the binary is placed in
-`$CHAINCASH_INSTALL/bin`), and `XDG_CONFIG_HOME`/`XDG_DATA_HOME` are respected. If the binary directory isn't on your
+`XDG_CONFIG_HOME`/`XDG_DATA_HOME` are respected, run the script with `--help` for all options. If the binary directory isn't on your
 `PATH` the script prints the line to add to your shell profile.
 
 After installing, set your Ergo node's URL and API key in the config file and start the server:

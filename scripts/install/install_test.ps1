@@ -24,7 +24,7 @@ $UserTarget = [System.EnvironmentVariableTarget]::User
 $SavedUserPath = [System.Environment]::GetEnvironmentVariable('Path', $UserTarget)
 $SavedProcessPath = $env:Path
 $SavedEnv = @{}
-foreach ($Name in 'CHAINCASH_INSTALL', 'CHAINCASH_RELEASE_URL', 'XDG_CONFIG_HOME', 'LOCALAPPDATA', 'TMP', 'CHAINCASH_SERVER.PORT') {
+foreach ($Name in 'CHAINCASH_INSTALL', 'CHAINCASH_RELEASE_URL', 'XDG_CONFIG_HOME', 'LOCALAPPDATA', 'TMP', 'CHAINCASH_SERVER.PORT', 'CHAINCASH_BIN_DIR') {
   $SavedEnv[$Name] = [System.Environment]::GetEnvironmentVariable($Name)
 }
 
@@ -112,7 +112,26 @@ try {
   Assert-Contains $Predicate '# user edit'
   Assert-Version $Exe
 
-  Write-Output "=== 4. installs to a relative custom location"
+  Write-Output "=== 4. a custom bin directory can be chosen with `$ChaincashBinDir, -BinDir or CHAINCASH_BIN_DIR"
+  $ChaincashBinDir = "${Root}\dedicated\bin"
+  $v = $null; & $Installer
+  $ChaincashBinDir = $null
+  Assert-File "${Root}\dedicated\bin\chaincash.exe"
+  $UserPath = [System.Environment]::GetEnvironmentVariable('Path', $UserTarget)
+  if (!(";${UserPath};".ToLower() -like "*;${Root}\dedicated\bin;*".ToLower())) {
+    throw "Expected ${Root}\dedicated\bin to be added to the user PATH"
+  }
+  $v = $null; & $Installer -BinDir "${Root}\arg-bin"
+  Assert-File "${Root}\arg-bin\chaincash.exe"
+  $env:CHAINCASH_BIN_DIR = "${Root}\env-bin"
+  try {
+    $v = $null; & $Installer
+  } finally {
+    $env:CHAINCASH_BIN_DIR = $null
+  }
+  Assert-File "${Root}\env-bin\chaincash.exe"
+
+  Write-Output "=== 5. installs to a relative custom location"
   Push-Location $Root
   try {
     $env:CHAINCASH_INSTALL = '.'
@@ -123,7 +142,7 @@ try {
   }
 
   if ($env:CHAINCASH_TEST_VERSION -and !$Dist) {
-    Write-Output "=== 5. installs a specific release ($env:CHAINCASH_TEST_VERSION)"
+    Write-Output "=== 6. installs a specific release ($env:CHAINCASH_TEST_VERSION)"
     $env:CHAINCASH_INSTALL = "${Root}\versioned"
     $v = $env:CHAINCASH_TEST_VERSION; & $Installer
     $Out = & "${Root}\versioned\bin\chaincash.exe" --version
@@ -133,7 +152,7 @@ try {
   }
 
   if ($Dist) {
-    Write-Output "=== 6. refuses to install a binary that doesn't match SHA256SUMS"
+    Write-Output "=== 7. refuses to install a binary that doesn't match SHA256SUMS"
     $Tampered = "${Root}\tampered"
     Copy-Item $Dist $Tampered -Recurse
     Get-ChildItem "${Tampered}\chaincash-*" | ForEach-Object { Add-Content $_.FullName 'tampered' }

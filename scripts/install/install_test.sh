@@ -132,6 +132,30 @@ assert_file "$root/xdg-config/chaincash/config.toml"
 assert_contains "$root/xdg-config/chaincash/config.toml" "$(native "$root/xdg-data/chaincash/chaincash.sqlite")"
 [ ! -e "$HOME/.local/bin/chaincash$ext" ] || fail "binary was installed to the default location"
 
+new_case "--bin-dir installs the binary to a dedicated ~/.chaincash/bin"
+# quoted so the installer has to expand ~ itself
+# shellcheck disable=SC2088 # literal ~ on purpose
+install --bin-dir '~/.chaincash/bin' >"$root/bin-dir.log"
+assert_file "$HOME/.chaincash/bin/chaincash$ext"
+assert_file "$HOME/.config/chaincash/config.toml"
+[ ! -e "$HOME/.local/bin/chaincash$ext" ] || fail "binary was also installed to ~/.local/bin"
+# not on PATH, so the PATH hint must point at the chosen directory
+assert_contains "$root/bin-dir.log" "export PATH=\"$HOME/.chaincash/bin:"
+
+new_case "--bin-dir=DIR works together with a version and CHAINCASH_BIN_DIR"
+# with --dist the version only changes the (overridden) download URL, so any value parses;
+# against GitHub, only pass a version that is known to exist
+if [ -n "$dist" ]; then
+	install --bin-dir="$root/flag-bin" 0.1.0 >/dev/null
+elif [ -n "${CHAINCASH_TEST_VERSION:-}" ]; then
+	install --bin-dir="$root/flag-bin" "$CHAINCASH_TEST_VERSION" >/dev/null
+else
+	install --bin-dir="$root/flag-bin" >/dev/null
+fi
+assert_file "$root/flag-bin/chaincash$ext"
+CHAINCASH_BIN_DIR="$root/env-bin" install >/dev/null
+assert_file "$root/env-bin/chaincash$ext"
+
 new_case "installs to a relative custom location"
 mkdir -p "$root/relative"
 (cd "$root/relative" && CHAINCASH_INSTALL="." sh "$installer" >/dev/null)

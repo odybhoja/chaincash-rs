@@ -3,11 +3,16 @@
 #
 #   irm https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.ps1 | iex
 #
-# Install a specific release:
+# Install a specific release, or the binary to a different directory (default: ~\.local\bin),
+# e.g. a dedicated ~\.chaincash\bin like ergomatic and deno:
 #
 #   $v="0.1.0"; irm https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.ps1 | iex
+#   $ChaincashBinDir="~\.chaincash\bin"; irm https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.ps1 | iex
+#
+# When running the downloaded script directly: .\install.ps1 [-BinDir <DIR>] [VERSION]
 #
 # Environment variables:
+#   CHAINCASH_BIN_DIR      directory to install the binary to, same as -BinDir
 #   CHAINCASH_INSTALL      install prefix, the binary goes in "$env:CHAINCASH_INSTALL\bin" (default: ~\.local)
 #   CHAINCASH_REPO         GitHub repository to download releases from (default: BetterMoneyLabs/chaincash-rs)
 #   CHAINCASH_RELEASE_URL  base URL of release assets, overrides CHAINCASH_REPO (mainly for testing)
@@ -20,8 +25,20 @@ $ErrorActionPreference = 'Stop'
 if ($v) {
   $Version = $v
 }
-if ($Args.Length -eq 1) {
-  $Version = $Args.Get(0)
+$BinDirArg = if ($ChaincashBinDir) { $ChaincashBinDir } else { $env:CHAINCASH_BIN_DIR }
+for ($i = 0; $i -lt $Args.Length; $i++) {
+  $Arg = "$($Args[$i])"
+  if ($Arg -eq '-BinDir') {
+    if ($i + 1 -ge $Args.Length) {
+      throw "-BinDir requires a directory"
+    }
+    $i++
+    $BinDirArg = "$($Args[$i])"
+  } elseif ($Arg.StartsWith('-')) {
+    throw "Unknown option '${Arg}', usage: install.ps1 [-BinDir <DIR>] [VERSION]"
+  } else {
+    $Version = $Arg
+  }
 }
 if ($Version) {
   $Version = "${Version}"
@@ -42,10 +59,21 @@ $ReleaseUrl = if ($env:CHAINCASH_RELEASE_URL) {
 $Target = 'x86_64-pc-windows-msvc'
 $Asset = "chaincash-${Target}.exe"
 
-$InstallPrefix = if ($env:CHAINCASH_INSTALL) { $env:CHAINCASH_INSTALL } else { "${Home}\.local" }
-# resolve relative to the current PowerShell location (GetFullPath would use the process directory)
-$InstallPrefix = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InstallPrefix)
-$BinDir = "${InstallPrefix}\bin"
+# Makes a path absolute: expands a leading ~ and resolves relative paths against the current
+# PowerShell location (GetFullPath would use the process directory instead)
+function Resolve-InstallPath($Path) {
+  if ($Path -eq '~' -or $Path.StartsWith('~\') -or $Path.StartsWith('~/')) {
+    $Path = $Home + $Path.Substring(1)
+  }
+  $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+}
+
+$BinDir = if ($BinDirArg) {
+  Resolve-InstallPath $BinDirArg
+} else {
+  $InstallPrefix = if ($env:CHAINCASH_INSTALL) { $env:CHAINCASH_INSTALL } else { "${Home}\.local" }
+  "$(Resolve-InstallPath $InstallPrefix)\bin"
+}
 $ChaincashExe = "${BinDir}\chaincash.exe"
 
 # must match `config_dir()` in crates/chaincash_app/src/lib.rs

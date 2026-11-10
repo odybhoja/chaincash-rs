@@ -3,11 +3,18 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.sh | sh
 #
-# Install a specific release by passing its tag:
+# Options (pass them after `sh -s --` when piping):
 #
-#   curl -fsSL .../install.sh | sh -s v0.1.0
+#   curl -fsSL .../install.sh | sh -s -- v0.1.0                       # install a specific release
+#   curl -fsSL .../install.sh | sh -s -- --bin-dir ~/.chaincash/bin   # install the binary elsewhere
+#
+#   [VERSION]          release tag to install, e.g. v0.1.0 (default: latest release)
+#   --bin-dir <DIR>    directory to install the binary to (default: ~/.local/bin)
+#                      e.g. ~/.chaincash/bin for a dedicated directory, like ergomatic and deno
+#   -h, --help         show this help
 #
 # Environment variables:
+#   CHAINCASH_BIN_DIR      same as --bin-dir
 #   CHAINCASH_INSTALL      install prefix, the binary goes in "$CHAINCASH_INSTALL/bin" (default: ~/.local)
 #   CHAINCASH_REPO         GitHub repository to download releases from (default: BetterMoneyLabs/chaincash-rs)
 #   CHAINCASH_RELEASE_URL  base URL of release assets, overrides CHAINCASH_REPO (mainly for testing)
@@ -23,9 +30,42 @@ error() {
 	exit 1
 }
 
+usage() {
+	# print the comment block at the top of this file
+	sed -n '2,/^$/s/^# \{0,1\}//p' "$0" 2>/dev/null ||
+		echo "Usage: install.sh [--bin-dir <DIR>] [VERSION]"
+}
+
 if [ -z "${HOME:-}" ]; then
 	error "\$HOME is not set"
 fi
+
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
+
+version=""
+bin_dir_arg="${CHAINCASH_BIN_DIR:-}"
+while [ $# -gt 0 ]; do
+	case $1 in
+	--bin-dir)
+		[ $# -ge 2 ] || error "--bin-dir requires a directory"
+		bin_dir_arg="$2"
+		shift
+		;;
+	--bin-dir=*) bin_dir_arg="${1#--bin-dir=}" ;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	-*) error "unknown option '$1', see --help" ;;
+	*)
+		[ -z "$version" ] || error "unexpected argument '$1', see --help"
+		version="$1"
+		;;
+	esac
+	shift
+done
 
 # ---------------------------------------------------------------------------
 # Detect target platform
@@ -54,7 +94,6 @@ fi
 # Resolve download location
 # ---------------------------------------------------------------------------
 
-version="${1:-}"
 case $version in
 "" | v*) ;;
 *) version="v$version" ;;
@@ -92,8 +131,21 @@ native_path() {
 	fi
 }
 
-install_prefix="$(absolute_path "${CHAINCASH_INSTALL:-$HOME/.local}")"
-bin_dir="$install_prefix/bin"
+# Expands a leading ~ (not expanded by the shell in e.g. --bin-dir=~/bin or quoted values).
+# shellcheck disable=SC2088 # matching a literal ~ on purpose
+expand_tilde() {
+	case $1 in
+	"~") echo "$HOME" ;;
+	"~/"*) echo "$HOME/${1#"~/"}" ;;
+	*) echo "$1" ;;
+	esac
+}
+
+if [ -n "$bin_dir_arg" ]; then
+	bin_dir="$(absolute_path "$(expand_tilde "$bin_dir_arg")")"
+else
+	bin_dir="$(absolute_path "$(expand_tilde "${CHAINCASH_INSTALL:-$HOME/.local}")")/bin"
+fi
 exe="$bin_dir/chaincash$ext"
 
 # must match `config_dir()` in crates/chaincash_app/src/lib.rs
