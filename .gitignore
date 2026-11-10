@@ -24,3 +24,6 @@ config/local*
 
 # IDEs
 .idea
+
+# install test reports (scripts/install/test_local.*)
+install-test-*.log

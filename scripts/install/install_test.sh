@@ -100,6 +100,11 @@ if [ -z "$ext" ]; then
 	done
 	kill "$pid" 2>/dev/null || true
 	wait "$pid" 2>/dev/null || true
+	if ! grep -q "loaded 1 predicates" "$log"; then
+		echo "--- chaincash run output ---"
+		cat "$log"
+		echo "----------------------------"
+	fi
 	assert_contains "$log" "loading config from $HOME/.config/chaincash/config.toml"
 	assert_contains "$log" "loaded 1 predicates"
 	assert_file "$HOME/.local/share/chaincash/chaincash.sqlite"
