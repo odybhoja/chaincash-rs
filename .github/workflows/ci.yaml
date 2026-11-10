@@ -39,6 +39,8 @@ jobs:
         run: cargo clippy --all-features
       - name: test
         run: cargo test
+      - name: shellcheck install scripts
+        run: shellcheck scripts/install/*.sh
       - uses: dorny/paths-filter@v2
         id: filter
         with:

@@ -1,0 +1,88 @@
+# Builds release binaries and publishes them as a GitHub release when a version tag is pushed:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The asset names are what scripts/install/install.{sh,ps1} download, keep them in sync.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds use the oldest supported runner so the binary links against an older glibc
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            features: bundled-sqlite,vendored-openssl
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+            features: bundled-sqlite,vendored-openssl
+          # macOS and Windows use the system TLS libraries so only SQLite needs bundling
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            features: bundled-sqlite
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            features: bundled-sqlite
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            features: bundled-sqlite
+            ext: .exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: "true"
+      - name: install rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: build
+        run: cargo build --release --locked -p chaincash_cli --target ${{ matrix.target }} --features ${{ matrix.features }}
+      - name: package
+        shell: bash
+        run: |
+          mkdir dist
+          cp "target/${{ matrix.target }}/release/chaincash${{ matrix.ext }}" "dist/chaincash-${{ matrix.target }}${{ matrix.ext }}"
+      - name: smoke test
+        # x86_64 macOS is cross compiled on an arm64 runner
+        if: matrix.target != 'x86_64-apple-darwin'
+        shell: bash
+        run: ./dist/chaincash-${{ matrix.target }}${{ matrix.ext }} --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaincash-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: chaincash-*
+          merge-multiple: true
+      - name: collect assets
+        run: |
+          cp config/predicates/example.toml dist/predicate-example.toml
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

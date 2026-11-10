@@ -1,0 +1,36 @@
+# Tests that the install scripts work on all operating systems against the published releases
+# of this repository (works on forks too). Triggered manually since it needs a release to exist.
+name: install_ci
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to additionally test installing, e.g. v0.1.0 (optional)"
+        required: false
+        default: ""
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-latest, ubuntu-22.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CHAINCASH_REPO: ${{ github.repository }}
+      CHAINCASH_TEST_VERSION: ${{ inputs.version }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: test install.sh
+        shell: bash
+        run: ./scripts/install/install_test.sh
+      - name: test install.ps1 (powershell)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/install/install_test.ps1
+      - name: test install.ps1 (pwsh)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/install/install_test.ps1

@@ -4,6 +4,18 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "chaincash"
+path = "src/main.rs"
+
+[features]
+# Compile SQLite into the binary instead of linking the system library.
+# Used for release builds so the binary runs on machines without libsqlite3 (e.g. Windows).
+bundled-sqlite = ["dep:libsqlite3-sys"]
+# Compile OpenSSL into the binary instead of linking the system library.
+# Used for Linux release builds so the binary doesn't depend on the host's libssl version.
+vendored-openssl = ["dep:openssl"]
+
 [dependencies]
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
@@ -15,3 +27,5 @@ tokio = { workspace = true }
 anyhow = "1.0.75"
 tracing-appender = "0.2.3"
 directories = "5.0.1"
+libsqlite3-sys = { version = "0.28", optional = true, features = ["bundled"] }
+openssl = { version = "0.10", optional = true, features = ["vendored"] }

@@ -13,9 +13,47 @@ server you can set your own acceptance predicate (filter for notes you accept), 
 and issue notes against it. 
 
 
-## Running
+## Installing
 
-We aren't yet shipping prebuilt `ChainCash` binaries so currently you must build from source yourself using `cargo`.
+Prebuilt binaries for Linux (x86_64, aarch64), macOS (x86_64, Apple Silicon) and Windows (x86_64) are published on
+the [releases](https://github.com/BetterMoneyLabs/chaincash-rs/releases) page. The install scripts download the
+binary for your platform and set up a default configuration.
+
+Linux and macOS:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/BetterMoneyLabs/chaincash-rs/master/scripts/install/install.ps1 | iex
+```
+
+To install a specific release pass its tag, e.g. `... | sh -s v0.1.0` or `$v="0.1.0"; irm ... | iex` on Windows.
+
+The scripts install the following files. Existing configuration is never overwritten, so the scripts can also be
+used to upgrade:
+
+| | Linux / macOS | Windows |
+| --- | --- | --- |
+| Binary | `~/.local/bin/chaincash` | `~\.local\bin\chaincash.exe` (added to `PATH`) |
+| Config | `~/.config/chaincash/config.toml` | `~\.config\chaincash\config.toml` |
+| Predicates | `~/.config/chaincash/predicates/` | `~\.config\chaincash\predicates\` |
+| Database | `~/.local/share/chaincash/chaincash.sqlite` | `%LOCALAPPDATA%\chaincash\chaincash.sqlite` |
+
+The install prefix can be changed with the `CHAINCASH_INSTALL` environment variable (the binary is placed in
+`$CHAINCASH_INSTALL/bin`), and `XDG_CONFIG_HOME`/`XDG_DATA_HOME` are respected. If the binary directory isn't on your
+`PATH` the script prints the line to add to your shell profile.
+
+After installing, set your Ergo node's URL and API key in the config file and start the server:
+
+```sh
+chaincash run
+```
+
+## Running from source
 
 Firstly ensure that you have the `contracts` submodule initialized:
 
@@ -33,11 +71,16 @@ This will start the `ChainCash` server and initialize the database, etc.
 
 ## Configuration
 
-`ChainCash` is configured using `TOML` config files stored in `$CWD/config`.
+`ChainCash` is configured using `TOML` config files. Settings are loaded from the following sources, later sources
+overriding earlier ones:
 
-The default settings can be viewed in [`./config/default.toml`](./config/default.toml).
+1. Built-in defaults, which can be viewed in [`./config/default.toml`](./config/default.toml) (compiled into the binary).
+2. `~/.config/chaincash/config.toml` (or `$XDG_CONFIG_HOME/chaincash/config.toml`), created by the install scripts.
+3. `./config/local.toml`, relative to the directory `chaincash` is run from. Handy when running from source.
+4. Environment variables prefixed with `CHAINCASH_`, e.g. `CHAINCASH_NODE.API_KEY`.
 
-Default config values can be overriden by creating your own config file at [`./config/local.toml`] and supplying custom values.
+Relative paths in config files (such as `store.url` and `acceptance.predicates`) are resolved against the directory
+`chaincash` is run from, so prefer absolute paths in `~/.config/chaincash/config.toml`.
 
 ## Predicates
 

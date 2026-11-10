@@ -13,7 +13,7 @@ enum Command {
 }
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(name = "chaincash", author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
