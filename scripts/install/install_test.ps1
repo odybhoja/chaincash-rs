@@ -24,7 +24,7 @@ $UserTarget = [System.EnvironmentVariableTarget]::User
 $SavedUserPath = [System.Environment]::GetEnvironmentVariable('Path', $UserTarget)
 $SavedProcessPath = $env:Path
 $SavedEnv = @{}
-foreach ($Name in 'CHAINCASH_INSTALL', 'CHAINCASH_RELEASE_URL', 'XDG_CONFIG_HOME', 'LOCALAPPDATA') {
+foreach ($Name in 'CHAINCASH_INSTALL', 'CHAINCASH_RELEASE_URL', 'XDG_CONFIG_HOME', 'LOCALAPPDATA', 'TMP', 'CHAINCASH_SERVER.PORT') {
   $SavedEnv[$Name] = [System.Environment]::GetEnvironmentVariable($Name)
 }
 
@@ -39,7 +39,7 @@ function Assert-File($Path) {
 }
 
 function Assert-Contains($Path, $Text) {
-  if (!((Get-Content $Path -Raw).Contains($Text))) {
+  if (!("$(Get-Content $Path -Raw)".Contains($Text))) {
     throw "Expected ${Path} to contain '${Text}'"
   }
 }
@@ -76,7 +76,34 @@ try {
     throw "Expected ${Root}\latest\bin to be added to the user PATH"
   }
 
-  Write-Output "=== 2. re-running keeps existing configuration and replaces the binary"
+  Write-Output "=== 2. installed binary reads its config from the config directory"
+  # bind a random free port, and keep the crash report written when no Ergo node is reachable
+  # (which happens after the config is loaded) inside the test directory
+  [System.Environment]::SetEnvironmentVariable('CHAINCASH_SERVER.PORT', '0')
+  $env:TMP = $Root
+  $RunLog = "${Root}\run.log"
+  # run from an unrelated directory so .\config\ can't be picked up. Note: the server also writes
+  # its log file to %APPDATA%\chaincash.log.d, which is a known folder and can't be redirected
+  $Proc = Start-Process -FilePath $Exe -ArgumentList 'run' -WorkingDirectory $Root -NoNewWindow -PassThru `
+    -RedirectStandardOutput $RunLog -RedirectStandardError "${Root}\run.err"
+  $Deadline = (Get-Date).AddSeconds(15)
+  while ((Get-Date) -lt $Deadline -and !((Test-Path $RunLog) -and (Get-Content $RunLog -Raw) -like '*loaded 1 predicates*')) {
+    Start-Sleep -Milliseconds 200
+  }
+  if (!$Proc.HasExited) {
+    Stop-Process -Id $Proc.Id -Force
+  }
+  $Proc.WaitForExit()
+  if (!((Get-Content $RunLog -Raw) -like '*loaded 1 predicates*')) {
+    Write-Output "--- chaincash run output ---"
+    Get-Content $RunLog, "${Root}\run.err" -ErrorAction SilentlyContinue
+    Write-Output "----------------------------"
+  }
+  Assert-Contains $RunLog "loading config from ${ConfigFile}"
+  Assert-Contains $RunLog 'loaded 1 predicates'
+  Assert-File "${Root}\localappdata\chaincash\chaincash.sqlite"
+
+  Write-Output "=== 3. re-running keeps existing configuration and replaces the binary"
   Add-Content $ConfigFile '# user edit'
   Add-Content $Predicate '# user edit'
   Set-Content $Exe 'stale'
@@ -85,7 +112,7 @@ try {
   Assert-Contains $Predicate '# user edit'
   Assert-Version $Exe
 
-  Write-Output "=== 3. installs to a relative custom location"
+  Write-Output "=== 4. installs to a relative custom location"
   Push-Location $Root
   try {
     $env:CHAINCASH_INSTALL = '.'
@@ -96,7 +123,7 @@ try {
   }
 
   if ($env:CHAINCASH_TEST_VERSION -and !$Dist) {
-    Write-Output "=== 4. installs a specific release ($env:CHAINCASH_TEST_VERSION)"
+    Write-Output "=== 5. installs a specific release ($env:CHAINCASH_TEST_VERSION)"
     $env:CHAINCASH_INSTALL = "${Root}\versioned"
     $v = $env:CHAINCASH_TEST_VERSION; & $Installer
     $Out = & "${Root}\versioned\bin\chaincash.exe" --version
@@ -106,7 +133,7 @@ try {
   }
 
   if ($Dist) {
-    Write-Output "=== 5. refuses to install a binary that doesn't match SHA256SUMS"
+    Write-Output "=== 6. refuses to install a binary that doesn't match SHA256SUMS"
     $Tampered = "${Root}\tampered"
     Copy-Item $Dist $Tampered -Recurse
     Get-ChildItem "${Tampered}\chaincash-*" | ForEach-Object { Add-Content $_.FullName 'tampered' }
